@@ -35,4 +35,38 @@ abstract class Entity {
      * ];
      */
     abstract protected function getFields(): array;
+
+    /**
+     * Serialize this entity back to an API-compatible array.
+     *
+     * Only properties that are not null are included, so partial objects
+     * produce clean partial payloads (useful for updates). Nested entities
+     * are recursively serialized. Arrays of entities are mapped to arrays
+     * of arrays.
+     */
+    public function toArray(): array {
+        $result = [];
+
+        foreach ($this->getFields() as $property => $definition) {
+            $key   = $definition['key'] ?? $property;
+            $type  = $definition['type'] ?? 'string';
+            $class = $definition['class'] ?? null;
+
+            $value = $this->$property;
+
+            if ($value === null) {
+                continue;
+            }
+
+            $result[$key] = match ($type) {
+                'object' => $value instanceof self ? $value->toArray() : $value,
+                'array'  => $class
+                    ? array_map(fn($item) => $item instanceof self ? $item->toArray() : $item, $value)
+                    : $value,
+                default  => $value,
+            };
+        }
+
+        return $result;
+    }
 }

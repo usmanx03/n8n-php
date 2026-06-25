@@ -4,6 +4,7 @@ namespace UsmanZahid\N8n\Clients;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use UsmanZahid\N8n\Entities\Entity;
 use UsmanZahid\N8n\Helpers\RequestHelper;
 use UsmanZahid\N8n\Response\N8nResponse;
 
@@ -80,25 +81,68 @@ class ApiClient {
     }
 
     /**
-     * Convert the raw array from BaseClient into a user-facing structure
-     * and optionally hydrate an entity class.
+     * Wrap a raw API response into an N8nResponse, optionally hydrating a single entity.
      *
      * @param array $raw
-     * @param string|null $entityClass
+     * @param string|null $entityClass Fully-qualified entity class name
      * @return N8nResponse
      */
     protected function wrapEntity(array $raw, ?string $entityClass = null): N8nResponse {
         $success = $raw['success'] ?? false;
+        $code    = $raw['code'] ?? ($success ? 200 : 500);
+        $message = $raw['message'] ?? ($success ? 'Success' : 'Error');
 
         $data = $success && $entityClass && isset($raw['data'])
             ? new $entityClass($raw['data'])
-            :($success ? $raw['data']:null);
-
-        $message = $raw['message'] ?? ($success ? "Success":"Error");
-
-        $code = $raw['code'] ?? ($success ? 200:500);
+            : ($success ? $raw['data'] : null);
 
         return new N8nResponse($success, $data, $message, $code);
+    }
+
+    /**
+     * Wrap a raw API response whose data is a plain array of items into an
+     * N8nResponse<EntityClass[]>. Use this for endpoints that return a bare
+     * JSON array rather than a paginated envelope.
+     *
+     * @param array $raw
+     * @param string $entityClass Fully-qualified entity class name
+     * @return N8nResponse
+     */
+    protected function wrapArray(array $raw, string $entityClass): N8nResponse {
+        $success = $raw['success'] ?? false;
+        $code    = $raw['code'] ?? ($success ? 200 : 500);
+        $message = $raw['message'] ?? ($success ? 'Success' : 'Error');
+
+        if (!$success) {
+            return new N8nResponse(false, null, $message, $code);
+        }
+
+        $data  = $raw['data'] ?? [];
+        $items = is_array($data) ? array_map(fn($item) => new $entityClass($item), $data) : [];
+
+        return new N8nResponse(true, $items, $message, $code);
+    }
+
+    /**
+     * Extract a string ID from either a plain string or an Entity instance.
+     * Reads the entity's $id property, which all addressable entities expose.
+     *
+     * @param string|Entity $subject
+     * @return string
+     */
+    protected function resolveId(string|Entity $subject): string {
+        return $subject instanceof Entity ? $subject->id : $subject;
+    }
+
+    /**
+     * Normalize a payload that is either a raw array or an Entity instance.
+     * Entities are serialized via toArray() before being sent to the API.
+     *
+     * @param array|Entity $payload
+     * @return array
+     */
+    protected function resolvePayload(array|Entity $payload): array {
+        return $payload instanceof Entity ? $payload->toArray() : $payload;
     }
 
 }
