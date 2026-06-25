@@ -16,10 +16,11 @@ abstract class Entity {
             $value = $data[$key];
 
             $this->$property = match ($type) {
-                'string', 'int', 'float', 'bool' => settype($value, $type) ? $value:null,
-                'object' => $class ? new $class($value):$value,
-                'array' => ($class && is_array($value)) ? array_map(fn($item) => new $class($item), $value):$value,
-                default => $value,
+                'string', 'int', 'float', 'bool' => settype($value, $type) ? $value : null,
+                'object' => $class ? new $class($value) : $value,
+                'array'  => ($class && is_array($value)) ? array_map(fn($item) => new $class($item), $value) : ($value ?? []),
+                'raw'    => $value,
+                default  => $value,
             };
         }
     }
